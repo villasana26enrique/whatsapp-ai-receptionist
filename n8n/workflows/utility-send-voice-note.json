@@ -1,0 +1,223 @@
+{
+  "id": "QZQq06oaHBMGxTpB",
+  "name": "Utility: Send voice note",
+  "description": "Reusable utility: turns a text into a WhatsApp voice note (Gemini TTS + audio-converter container with ffmpeg) and sends it.",
+  "active": false,
+  "nodes": [
+    {
+      "id": "64113b91-1d8a-4cb9-b5df-1f23a4f81337",
+      "name": "When a voice reply is needed",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "to",
+              "type": "string"
+            },
+            {
+              "name": "phone_number_id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "288a698a-aa5c-4256-9c2d-59e365e39bf1",
+      "name": "Generate speech (Gemini TTS)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: 'Read this aloud in a warm, friendly receptionist voice, at a natural pace: ' + $json.text }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } } }) }}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "PagpXlhagAXnBBZ8",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "cef50738-6bc1-45c2-aadd-7f3f5f214c38",
+      "name": "Convert to OGG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://audio-converter:8080/pcm-to-ogg",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ audio_base64: $json.candidates[0].content.parts[0].inlineData.data, sample_rate: Number(($json.candidates[0].content.parts[0].inlineData.mimeType.match(/rate=(\\d+)/) || [0, 24000])[1]) }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "45233901-4fa1-4232-af15-f024449fbfc9",
+      "name": "Upload audio to WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('When a voice reply is needed').first().json.phone_number_id }}/media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formData",
+              "name": "messaging_product",
+              "value": "whatsapp"
+            },
+            {
+              "parameterType": "formData",
+              "name": "type",
+              "value": "audio/ogg"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "OQspKoDiqTdRV93P",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "id": "66681312-4c3f-4e4f-ac86-6dfcec01cc68",
+      "name": "Send voice note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('When a voice reply is needed').first().json.phone_number_id }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('When a voice reply is needed').first().json.to, type: 'audio', audio: { id: $json.id, voice: true } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "OQspKoDiqTdRV93P",
+          "name": "WhatsApp account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When a voice reply is needed": {
+      "main": [
+        [
+          {
+            "node": "Generate speech (Gemini TTS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate speech (Gemini TTS)": {
+      "main": [
+        [
+          {
+            "node": "Convert to OGG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to OGG": {
+      "main": [
+        [
+          {
+            "node": "Upload audio to WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload audio to WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Send voice note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

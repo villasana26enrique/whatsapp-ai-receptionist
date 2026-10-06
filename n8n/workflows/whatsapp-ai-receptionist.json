@@ -1,0 +1,1438 @@
+{
+  "id": "qQGy3dYYWmNR3kVx",
+  "name": "WhatsApp AI Receptionist",
+  "description": "WhatsApp AI receptionist for a demo dental clinic: text + voice notes, 8 s message buffer, Gemini agent with Postgres memory and 5 booking tools, voice replies.",
+  "active": false,
+  "nodes": [
+    {
+      "id": "9ad83721-ddeb-42ed-8f94-96d55ddadb5d",
+      "name": "Meta webhook verification",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "177eb40c-05ca-454d-ab53-7211ed418267"
+    },
+    {
+      "id": "bea3b82b-e561-41ab-9d50-7fa61c9a42c3",
+      "name": "Respond with challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] ?? $json.query.hub_challenge }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "c737b5ff-8525-4420-8e0d-53fafa28d088",
+      "name": "Incoming WhatsApp event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        320
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "ed5c0926-479a-4768-ac16-29aad5087265"
+    },
+    {
+      "id": "0cb34a9c-29ce-4a2e-a865-4cbf25717142",
+      "name": "Acknowledge Meta (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        224,
+        320
+      ],
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "c3aa920c-d886-484c-84c3-f55916d4bafd",
+      "name": "Text or audio message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        320
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type ?? '' }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type ?? '' }}",
+              "rightValue": "audio",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b201ca96-febd-4608-a7a7-690f5d73c6a2",
+      "name": "Extract message data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        672,
+        320
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "from",
+              "name": "from",
+              "value": "={{ $json.body.entry[0].changes[0].value.messages[0].from }}",
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "name": "name",
+              "value": "={{ $json.body.entry[0].changes[0].value.contacts[0].profile.name }}",
+              "type": "string"
+            },
+            {
+              "id": "text",
+              "name": "text",
+              "value": "={{ $json.body.entry[0].changes[0].value.messages[0].text?.body ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "phone_number_id",
+              "name": "phone_number_id",
+              "value": "={{ $json.body.entry[0].changes[0].value.metadata.phone_number_id }}",
+              "type": "string"
+            },
+            {
+              "id": "message_id",
+              "name": "message_id",
+              "value": "={{ $json.body.entry[0].changes[0].value.messages[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "type",
+              "name": "type",
+              "value": "={{ $json.body.entry[0].changes[0].value.messages[0].type }}",
+              "type": "string"
+            },
+            {
+              "id": "media_id",
+              "name": "media_id",
+              "value": "={{ $json.body.entry[0].changes[0].value.messages[0].audio?.id ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b2634a85-b525-4e1c-b7fc-bdc48ee4299b",
+      "name": "Mark as read + typing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        224
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.phone_number_id }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $json.message_id, typing_indicator: { type: 'text' } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "OQspKoDiqTdRV93P",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "46c2a34e-766c-4d46-b7ff-022cb99d36d3",
+      "name": "Is audio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        416
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "audio",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d7403bd3-2207-4dd2-a11a-dc88f4a831df",
+      "name": "Get audio URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        352
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.media_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {}
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "OQspKoDiqTdRV93P",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "id": "79fbfff8-a743-4bb6-835f-f63b3aebfa11",
+      "name": "Download audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1344,
+        352
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "OQspKoDiqTdRV93P",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "id": "4494ed49-42ef-4274-9105-bbcb61fb21f3",
+      "name": "Transcribe audio",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        352
+      ],
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "models/gemini-flash-lite-latest"
+        },
+        "inputType": "binary",
+        "binaryPropertyName": "data",
+        "simplify": true,
+        "options": {}
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "PagpXlhagAXnBBZ8",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "63560abb-165c-4bfe-8e3d-8e5002a8080a",
+      "name": "Audio as text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1792,
+        352
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "from",
+              "name": "from",
+              "value": "={{ $('Extract message data').first().json.from }}",
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "name": "name",
+              "value": "={{ $('Extract message data').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "phone_number_id",
+              "name": "phone_number_id",
+              "value": "={{ $('Extract message data').first().json.phone_number_id }}",
+              "type": "string"
+            },
+            {
+              "id": "message_id",
+              "name": "message_id",
+              "value": "={{ $('Extract message data').first().json.message_id }}",
+              "type": "string"
+            },
+            {
+              "id": "text",
+              "name": "text",
+              "value": "={{ ($json.content?.parts?.map(p => p.text).join('') || $json.text || '').trim() || '[voice note with no recognizable speech]' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c642f0ff-5eee-4218-a893-0415b0206818",
+      "name": "Wait 8 s for more messages",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2240,
+        416
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 8,
+        "unit": "seconds"
+      },
+      "webhookId": "c8b04ace-94ef-4595-95b3-1c0c9c7c0f92"
+    },
+    {
+      "id": "edbf57a9-23a0-4008-adb6-51e2df46e97e",
+      "name": "Merge pending messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        416
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Only the execution of the latest message from this number continues; the others end silently\nconst current = $('Extract message data').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.message_id);\nif (!rows.length || rows[rows.length - 1].message_id !== current.message_id) {\n  return [];\n}\n\nreturn [{ json: {\n  ...current,\n  text: rows.map(r => r.text).join('\\n'),\n  message_count: rows.length,\n  last_buffer_id: Math.max(...rows.map(r => Number(r.id)))\n} }];"
+      }
+    },
+    {
+      "id": "e85e3ef0-409f-49a1-bc57-96601a450b82",
+      "name": "Combined message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3136,
+        416
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "from",
+              "name": "from",
+              "value": "={{ $('Merge pending messages').first().json.from }}",
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "name": "name",
+              "value": "={{ $('Merge pending messages').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "text",
+              "name": "text",
+              "value": "={{ $('Merge pending messages').first().json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "phone_number_id",
+              "name": "phone_number_id",
+              "value": "={{ $('Merge pending messages').first().json.phone_number_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "a9826102-5063-46db-aa31-79dc34d45fbe",
+      "name": "Agent settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3360,
+        416
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "include": "all",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "model",
+              "name": "model",
+              "value": "models/gemini-flash-lite-latest",
+              "type": "string"
+            },
+            {
+              "id": "system_prompt",
+              "name": "system_prompt",
+              "value": "You are the WhatsApp assistant for Maple Grove Dental Studio, a family dental clinic in New York City. You answer patient questions and book, check, reschedule and cancel appointments.\n\nClinic information (the ONLY facts you may use):\n- Address: 318 W 57th St, Suite 3, New York, NY 10019 (Midtown Manhattan, near Columbus Circle). Closest subway: 59 St-Columbus Circle.\n- Hours: Monday to Friday 8:00 AM - 6:00 PM, Saturday 9:00 AM - 1:00 PM, closed Sunday.\n- Phone for emergencies and calls: (212) 555-0147.\n- Services (exact names), duration and starting prices (without insurance):\n  - Toothache / emergency exam (30 min; exam + X-ray of the painful area, the dentist then recommends treatment): $79\n  - New patient exam + X-rays + cleaning (60 min): $149\n  - Routine cleaning (60 min): $99\n  - Teeth whitening (in-office) (90 min): $350\n  - Tooth-colored filling (60 min): from $180\n  - Root canal (90 min): from $900\n  - Dental implant consultation (30 min): free\n  - Invisalign consultation (30 min): free\n- Insurance: we accept Delta Dental, Cigna, Aetna, MetLife and Guardian. We also offer an in-house membership plan ($29/month, includes 2 cleanings a year and 15% off treatments).\n- Payment: cash, card, CareCredit and 0% financing for treatments over $1,000.\n- Cancellation policy: please cancel at least 24 hours in advance.\n\nHow to behave:\n- Reply in the same language the patient writes in.\n- Keep replies short, friendly and natural, like a helpful receptionist on WhatsApp: 1 to 4 short sentences. No markdown, no headings, no bullet lists.\n- Use the current date and time you are given to answer questions like \"are you open now?\" and to turn relative days (\"Wednesday\", \"tomorrow\") into a concrete date.\n\nYour tools:\n- check_availability(date, service): free start times for that service on that day (accounts for duration). ALWAYS call it before offering or accepting any time. Never invent availability.\n- book_appointment(date, time, full_name, service): books a new appointment and returns its booking code.\n- get_my_appointments(): lists the upcoming appointments of the patient who is writing (by their WhatsApp number), with booking codes.\n- cancel_appointment(booking_code, full_name): cancels an appointment by booking code.\n- reschedule_appointment(booking_code, date, time, full_name): moves an appointment to another free day/time, keeping its booking code and service.\n\nBooking a new appointment:\n- First make sure you know the service, then ask which day the patient prefers (do not assume a day), check availability and offer 2 or 3 free times (not the whole list). If the day is closed or full, say so and offer another day. If they ask for morning or afternoon, offer times in that part of the day.\n- The service must be one from the clinic list, using its exact name. If the patient has pain and does not know what they need, use \"Toothache / emergency exam\". If what they said does not clearly match one service, ask which one. Never pick an unrelated service.\n- Full name: you may use the WhatsApp name if it looks like a real full name; otherwise ask for it.\n- Before booking, ALWAYS send a short summary and ask for confirmation, e.g. \"I'll book: Routine cleaning, Monday, October 5 at 2:00 PM, for Enrique Villasana. Shall I confirm it?\". Call book_appointment ONLY when the patient's LATEST message clearly says yes to that summary.\n- When it returns ok=true, confirm service, full date and time, and give the booking code (e.g. MG-7K3QX), telling the patient to keep it. If ok=false, explain briefly and offer other times.\n\nChecking, rescheduling or cancelling:\n- When the patient asks about their appointments, call get_my_appointments first (you do not need to ask for the code). If they have one, refer to it by service, date and time; if several, ask which one. If none are found, the patient may be writing from a different number: ask for the booking code and the patient's full name.\n- Use the patient's full name in the full_name parameter ONLY when they write from a number different from the one used to book; otherwise send an empty string.\n- To reschedule: confirm which appointment, ask for the new day, call check_availability with that appointment's service, offer 2 or 3 times, summarize the change (from old date/time to new date/time) and call reschedule_appointment ONLY after a clear yes in the latest message.\n- To cancel: summarize which appointment will be cancelled and call cancel_appointment ONLY after a clear yes in the latest message. If the result says less_than_24h=true, kindly remind them of the 24-hour cancellation policy. After cancelling, offer to book a new time.\n- Never reveal or confirm appointments that are not returned by the tools.\n\nHealth questions: never diagnose or recommend medication (you cannot say whether a medicine is OK to take). For normal discomfort, say you cannot give medical advice and offer to book a toothache / emergency exam. Only for severe pain, facial swelling, bleeding that will not stop, trauma or a knocked-out tooth, tell them to call (212) 555-0147 right away, or 911 if it is life-threatening.\n\nIf you do not know something or it is not in the clinic information, say so honestly and offer to have a team member follow up. Never invent prices, availability or policies.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3c5ceb05-58d0-4703-bfa3-092ddd4eb3e8",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3904,
+        416
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "={{ $json.system_prompt }}\n\nCurrent date and time at the clinic (New York): {{ $now.setZone('America/New_York').toFormat(\"cccc, LLLL d, yyyy, h:mm a\") }}.\n\nThe patient's WhatsApp name is: {{ $json.name }}. Greet the patient by name only at the start of a new conversation; in follow-up messages, continue naturally without greeting again.\n\nIMPORTANT: you cannot send a message later. Each reply you write is final until the patient writes again. Never say \"let me check\", \"I'll check\" or \"one moment\". If you need availability, call check_availability NOW, in this same turn, and reply with the actual free times.",
+          "enableStreaming": false
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "2aa4daa3-5ee0-4e9d-8357-cabb7978e1d5",
+      "name": "Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        3584,
+        640
+      ],
+      "parameters": {
+        "modelName": "={{ $('Agent settings').item.json.model }}",
+        "options": {
+          "maxOutputTokens": 2048
+        }
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "PagpXlhagAXnBBZ8",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "id": "ce3b3ef6-ac87-4783-8079-cca97f238c19",
+      "name": "Chat memory (Postgres)",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        3712,
+        640
+      ],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Extract message data').first().json.from }}",
+        "tableName": "dental_clinic.chat_history",
+        "contextWindowLength": 10
+      },
+      "credentials": {
+        "postgres": {
+          "id": "QugGwVrTwVGwNGBq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "9031e99e-bd8c-4b1c-b0fd-3b0a828eb16b",
+      "name": "check_availability",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        3840,
+        640
+      ],
+      "parameters": {
+        "description": "Returns the free start times on a day for a specific service, taking the service duration into account. ALWAYS use it before offering or accepting a time.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "u4zk3B48hPfoFaaa",
+          "cachedResultName": "Tool: Check availability"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'Day to check, format YYYY-MM-DD') }}",
+            "service": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('service', 'Exact service name from the clinic list, e.g. Routine cleaning') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "date",
+              "displayName": "date"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "service",
+              "displayName": "service"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "bea09d14-96da-4f6e-acc7-d3c308b9b5be",
+      "name": "book_appointment",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        3968,
+        640
+      ],
+      "parameters": {
+        "description": "Books an appointment in the clinic database (and mirrors it in the calendar). Returns ok=true with the booking code, or ok=false with the reason.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tCInZXEmBEsGlo9t",
+          "cachedResultName": "Tool: Book appointment"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'Appointment day, format YYYY-MM-DD') }}",
+            "time": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('time', 'Start time, 24-hour HH:mm format, one of the free times') }}",
+            "full_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('full_name', \"Patient's full name\") }}",
+            "service": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('service', 'Exact service name from the clinic list') }}",
+            "phone": "={{ $('Extract message data').first().json.from }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "date",
+              "displayName": "date"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "time",
+              "displayName": "time"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "full_name",
+              "displayName": "full_name"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "service",
+              "displayName": "service"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "phone",
+              "displayName": "phone"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "03fd7f20-3401-4e1d-9fde-c7fd6808b336",
+      "name": "get_my_appointments",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        4096,
+        640
+      ],
+      "parameters": {
+        "description": "Returns the upcoming confirmed appointments of the patient who is writing (by their WhatsApp number), with booking code, service, date and time. Takes no parameters.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "4e88mmZwNoHCeo16",
+          "cachedResultName": "Tool: Get my appointments"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Extract message data').first().json.from }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "phone",
+              "displayName": "phone"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "ddb38da4-4576-4bad-bb98-1bbb302b4820",
+      "name": "cancel_appointment",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        4224,
+        640
+      ],
+      "parameters": {
+        "description": "Cancels an appointment by its booking code. Returns ok=true, or ok=false with the reason. less_than_24h=true means it was cancelled with less than 24 hours notice.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "5Iy94ttvJAAoeHMJ",
+          "cachedResultName": "Tool: Cancel appointment"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_code": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('booking_code', 'Booking code of the appointment, e.g. MG-7K3QX') }}",
+            "full_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('full_name', \"Patient's full name, ONLY if the patient writes from a number different from the one used to book; otherwise an empty string\") }}",
+            "phone": "={{ $('Extract message data').first().json.from }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "booking_code",
+              "displayName": "booking_code"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "phone",
+              "displayName": "phone"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "full_name",
+              "displayName": "full_name"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "aec50c85-b5fe-435e-9442-f1de178435b3",
+      "name": "reschedule_appointment",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        4352,
+        640
+      ],
+      "parameters": {
+        "description": "Moves an existing appointment (same booking code and service) to another free day and time. Check check_availability with that appointment's service first. Returns ok=true, or ok=false with the reason.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "FK9P24mIWJfyvTCV",
+          "cachedResultName": "Tool: Reschedule appointment"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_code": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('booking_code', 'Booking code of the appointment, e.g. MG-7K3QX') }}",
+            "date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', 'New day, format YYYY-MM-DD') }}",
+            "time": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('time', 'New start time, 24-hour HH:mm format, one of the free times') }}",
+            "full_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('full_name', \"Patient's full name, ONLY if the patient writes from a number different from the one used to book; otherwise an empty string\") }}",
+            "phone": "={{ $('Extract message data').first().json.from }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "booking_code",
+              "displayName": "booking_code"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "date",
+              "displayName": "date"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "time",
+              "displayName": "time"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "phone",
+              "displayName": "phone"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "full_name",
+              "displayName": "full_name"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "83d3b786-4a12-45de-a849-698333bacf79",
+      "name": "Reply with voice?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4560,
+        416
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $('Extract message data').first().json.type }}",
+              "rightValue": "audio",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "67cc1c35-db5d-4d8b-ba73-903a7e878965",
+      "name": "Send voice reply",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        4784,
+        352
+      ],
+      "parameters": {
+        "mode": "once",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "QZQq06oaHBMGxTpB",
+          "cachedResultName": "Utility: Send voice note"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "text": "={{ $('AI Agent').first().json.output }}",
+            "to": "={{ $('Extract message data').first().json.from }}",
+            "phone_number_id": "={{ $('Extract message data').first().json.phone_number_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "text",
+              "displayName": "text"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "to",
+              "displayName": "to"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "phone_number_id",
+              "displayName": "phone_number_id"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "58d208a2-1385-467e-a5c0-0423018f78e6",
+      "name": "Has booking code?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5008,
+        272
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ /MG-[A-Z0-9]{5}/.test($('AI Agent').first().json.output) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e4b5c5a6-569d-4162-a1ca-20eb1f72a307",
+      "name": "Send text reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        5232,
+        416
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Extract message data').first().json.phone_number_id }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Extract message data').first().json.from, type: 'text', text: { body: $('AI Agent').first().json.output || 'Sorry, something went wrong on our side. A team member will get back to you shortly.' } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "whatsAppApi": {
+          "id": "OQspKoDiqTdRV93P",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "id": "1cb415f6-92f6-4d91-bfe9-5784e2ed6b7f",
+      "name": "Save to buffer",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2016,
+        416
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- ON CONFLICT: a message Meta delivers twice is buffered (and answered) only once\nINSERT INTO dental_clinic.pending_messages (phone, message_id, text)\nVALUES ($1, $2, $3)\nON CONFLICT (message_id) DO NOTHING\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$json.from, $json.message_id, $json.text] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "QugGwVrTwVGwNGBq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "1d87ad53-5a8c-4ba2-9ba2-7014fbb8d6ec",
+      "name": "Read pending messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2464,
+        416
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, message_id, text\nFROM dental_clinic.pending_messages\nWHERE phone = $1\nORDER BY id;",
+        "options": {
+          "queryReplacement": "={{ [$('Extract message data').first().json.from] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "QugGwVrTwVGwNGBq",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "a850cec4-fd42-40c3-a210-8fd5e65c242f",
+      "name": "Clear buffer",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2912,
+        416
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Only up to the last id read: a message that arrived meanwhile stays for its own execution\nDELETE FROM dental_clinic.pending_messages\nWHERE phone = $1 AND id <= $2::bigint;",
+        "options": {
+          "queryReplacement": "={{ [$json.from, $json.last_buffer_id] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "QugGwVrTwVGwNGBq",
+          "name": "Postgres account"
+        }
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Meta webhook verification": {
+      "main": [
+        [
+          {
+            "node": "Respond with challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incoming WhatsApp event": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Meta (200)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Meta (200)": {
+      "main": [
+        [
+          {
+            "node": "Text or audio message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text or audio message?": {
+      "main": [
+        [
+          {
+            "node": "Extract message data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract message data": {
+      "main": [
+        [
+          {
+            "node": "Mark as read + typing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is audio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is audio?": {
+      "main": [
+        [
+          {
+            "node": "Get audio URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save to buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get audio URL": {
+      "main": [
+        [
+          {
+            "node": "Download audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download audio": {
+      "main": [
+        [
+          {
+            "node": "Transcribe audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe audio": {
+      "main": [
+        [
+          {
+            "node": "Audio as text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combined message": {
+      "main": [
+        [
+          {
+            "node": "Agent settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent settings": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Reply with voice?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat memory (Postgres)": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_availability": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "book_appointment": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_my_appointments": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancel_appointment": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "reschedule_appointment": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply with voice?": {
+      "main": [
+        [
+          {
+            "node": "Send voice reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send text reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send voice reply": {
+      "main": [
+        [
+          {
+            "node": "Has booking code?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send text reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has booking code?": {
+      "main": [
+        [
+          {
+            "node": "Send text reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio as text": {
+      "main": [
+        [
+          {
+            "node": "Save to buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to buffer": {
+      "main": [
+        [
+          {
+            "node": "Wait 8 s for more messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 8 s for more messages": {
+      "main": [
+        [
+          {
+            "node": "Read pending messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read pending messages": {
+      "main": [
+        [
+          {
+            "node": "Merge pending messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge pending messages": {
+      "main": [
+        [
+          {
+            "node": "Clear buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear buffer": {
+      "main": [
+        [
+          {
+            "node": "Combined message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "tags": []
+}
