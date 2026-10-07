@@ -8,7 +8,12 @@ Built with **n8n**, **Google Gemini**, **PostgreSQL** and the **WhatsApp Cloud A
 > **Demo clinic.** Maple Grove Dental Studio (New York) is fictional; its services, prices and address are made up.
 > The project runs on a single machine with a Meta test number. It is a portfolio project, not a production deployment.
 
-<!-- TODO: add docs/demo.gif — one text conversation (booking) and one voice note conversation -->
+<p align="center">
+  <img src="docs/demo.gif" alt="Booking a cleaning on WhatsApp: price, real free times, confirmation summary and booking code" width="720">
+</p>
+
+*A patient asks for the price, requests a Monday morning slot, picks one of the real free times, confirms the
+summary and gets a booking code — all saved in PostgreSQL and mirrored to Google Calendar.*
 
 ## What it does
 
