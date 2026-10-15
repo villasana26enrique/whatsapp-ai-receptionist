@@ -6,7 +6,8 @@ Read `README.md` first for what the project does and how it is structured.
 ## Project in one paragraph
 
 A WhatsApp AI receptionist for a fictional dental clinic. n8n hosts the agent (Gemini chat model, Postgres chat
-memory, five tools). Each tool is an n8n sub-workflow that calls a PL/pgSQL function in the `dental_clinic` schema.
+memory, six tools). Five tools are n8n sub-workflows that call PL/pgSQL functions in the `dental_clinic` schema;
+the sixth, `search_clinic_documents`, calls the search API of the separate RAG knowledge assistant project.
 PostgreSQL is the source of truth; Google Calendar is only a mirror kept in sync by a scheduled workflow.
 
 ## Conventions
@@ -40,9 +41,19 @@ PostgreSQL is the source of truth; Google Calendar is only a mirror kept in sync
 - The JSON files in `n8n/workflows/` are the source of truth for the repository, but n8n runs from its own database.
   After changing a workflow in n8n, run `./scripts/export-workflows.sh` and commit the result.
 - Sub-workflows are referenced **by id** from the agent's tool nodes; keep ids stable (import preserves them).
-  New workflows must be added to the id map in `scripts/export-workflows.sh`.
-- Never hard-code personal or instance data in workflows: the calendar id is `__GOOGLE_CALENDAR_ID__` in the
-  exported files; credentials are referenced, never embedded.
+  New workflows must be added to the id map in `scripts/export-workflows.sh` and to the publish list in
+  `scripts/reload-workflows.sh` (sub-workflows first).
+- **Importing a workflow unpublishes it.** Load workflow changes with `./scripts/reload-workflows.sh` (imports and
+  publishes them all); never import a single file by hand.
+- Never hard-code personal or instance data in workflows: the calendar id is `__GOOGLE_CALENDAR_ID__` and the RAG
+  search URL is `__RAG_SEARCH_URL__` in the exported files; credentials are referenced, never embedded.
+- AI Agent nodes have a fallback model (`needsFallback`, a second chat model on input 1): keep both, so a 503 from
+  one Gemini model does not leave the user without an answer.
+- AI Agent nodes keep `options.maxTokensFromMemory` (8000). It makes n8n trim the memory so the history always
+  starts on a user message. Without it, the memory window (which counts tool calls as messages) can start in the
+  middle of a tool call, and Gemini 3 rejects the request with 400 "function call turn comes immediately after a user
+  turn". The option is hidden in the n8n UI: keep it in the JSON.
+- The clinic documents tool sends only the question to the RAG service, never the patient's phone number.
 - `./scripts/setup-n8n.sh` is for a fresh instance: it re-creates credentials and overwrites workflows by id.
   Do not run it against an instance in use unless that is the intent.
 - Credential ids are fixed in `n8n/scripts/build-credentials.js` and referenced by the workflows; keep them in sync.
@@ -64,4 +75,5 @@ PostgreSQL is the source of truth; Google Calendar is only a mirror kept in sync
 | Apply migrations | `docker compose run --rm flyway` |
 | Database shell | `docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'` |
 | Export workflows | `./scripts/export-workflows.sh` |
+| Load workflow changes into n8n | `./scripts/reload-workflows.sh` |
 | Set up a fresh n8n (credentials + workflows + publish) | `./scripts/setup-n8n.sh` |

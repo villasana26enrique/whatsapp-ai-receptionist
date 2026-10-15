@@ -29,6 +29,13 @@ const credentials = [
     data: () => ({ host: 'https://generativelanguage.googleapis.com', apiKey: env.GEMINI_API_KEY }),
   },
   {
+    id: 'rG3sK8pW2nQ6vL4x',
+    name: 'RAG search API key',
+    type: 'httpHeaderAuth',
+    required: ['RAG_SEARCH_API_KEY'],
+    data: () => ({ name: 'X-API-Key', value: env.RAG_SEARCH_API_KEY }),
+  },
+  {
     id: 'YuVyTsCz6Jv4vpYH',
     name: 'Google Calendar account',
     type: 'googleCalendarOAuth2Api',

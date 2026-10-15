@@ -57,6 +57,9 @@ services:
       - ./n8n:/repo
     ports:
       - "${N8N_HOST_PORT:-5678}:5678"
+    # Lets n8n reach services published on this machine (the RAG search API) on Linux too
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       flyway:
         condition: service_completed_successfully

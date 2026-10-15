@@ -5,6 +5,7 @@ const path = require('path');
 
 const DIR = '/repo/workflows';
 const CALENDAR_PLACEHOLDER = '__GOOGLE_CALENDAR_ID__';
+const RAG_SEARCH_URL_PLACEHOLDER = '__RAG_SEARCH_URL__';
 // Fields that describe this instance (owner, versions, timestamps), not the workflow itself
 const DROP = ['shared', 'versionMetadata', 'activeVersionId', 'versionCounter', 'triggerCount',
   'sourceWorkflowId', 'createdAt', 'updatedAt', 'versionId', 'staticData', 'pinData', 'isArchived'];
@@ -23,6 +24,10 @@ for (const file of fs.readdirSync(DIR).filter(f => f.endsWith('.json'))) {
     if (calendar && typeof calendar.value === 'string' && calendar.value.endsWith('@group.calendar.google.com')) {
       calendar.value = CALENDAR_PLACEHOLDER;
       calendar.cachedResultName = 'Clinic calendar';
+    }
+    // The RAG search URL depends on where it is deployed
+    if (node.type === 'n8n-nodes-base.httpRequest' && /\/webhook\/search$/.test(node.parameters.url || '')) {
+      node.parameters.url = RAG_SEARCH_URL_PLACEHOLDER;
     }
   }
 

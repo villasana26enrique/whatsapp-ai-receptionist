@@ -17,6 +17,7 @@ declare -A WORKFLOWS=(
   [utility-send-voice-note]=QZQq06oaHBMGxTpB
   [sync-google-calendar]=6j99EaNwCWiWzInA
   [daily-maintenance]=ltnx0Bx5jpnZAskJ
+  [tool-search-clinic-documents]=K5dRw9Tn3QxP7mZb
 )
 
 for name in "${!WORKFLOWS[@]}"; do

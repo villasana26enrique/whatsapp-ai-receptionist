@@ -18,6 +18,9 @@ summary and gets a booking code — all saved in PostgreSQL and mirrored to Goog
 ## What it does
 
 - **Natural conversation in the patient's language** (English, Spanish, …) with memory per WhatsApp number.
+- **Answers from the clinic's documents**: aftercare, insurance, payments, cancellation fees and emergencies come
+  from the [RAG knowledge assistant](https://github.com/villasana26enrique/rag-knowledge-assistant), grounded in the
+  clinic's own documents; if they do not answer the question, the agent says so instead of guessing.
 - **Real availability**: free slots come from the database and depend on each service's duration
   (a 90-minute root canal needs three free 30-minute blocks).
 - **Booking with confirmation**: the agent summarizes service, date and time and only books after a clear "yes".
@@ -43,6 +46,7 @@ flowchart LR
   end
   N8N <--> GEM[Google Gemini<br/>chat · transcription · TTS]
   N8N --> CAL[Google Calendar<br/>clinic view]
+  N8N -- search API --> RAG[RAG knowledge assistant<br/>clinic documents]
 ```
 
 **Message flow** (workflow `WhatsApp AI Receptionist`):
@@ -59,6 +63,7 @@ flowchart LR
    | `get_my_appointments` | Tool: Get my appointments | `get_my_appointments` |
    | `cancel_appointment` | Tool: Cancel appointment | `cancel_appointment` |
    | `reschedule_appointment` | Tool: Reschedule appointment | `reschedule_appointment` |
+   | `search_clinic_documents` | Tool: Search clinic documents | — (calls the RAG search API) |
 
 5. The reply goes back as text, or as a voice note (Gemini TTS → `audio-converter` → WhatsApp).
 
@@ -77,14 +82,20 @@ Background workflows: **Sync appointments to Google Calendar** (every 15 min) an
 - **Ownership checks** never reveal whether another person's booking code exists.
 - **Soft delete**: cancelled appointments keep their row and full history (`appointment_history`).
 - **Idempotency**: the message buffer has a unique `message_id`, so a webhook Meta delivers twice is answered once.
+- **Never silent**: the agent retries, then switches to a fallback model (Gemini's free tier often answers 503 "high
+  demand"); if both fail, the patient gets an apology in their language instead of no reply.
 - **LLM-agnostic**: the model is one node; swapping Gemini for Claude or GPT does not touch tools or data.
+- **Structured data from the database, long text from documents.** Prices, hours and availability are SQL;
+  aftercare and policies come from the RAG service over HTTP. The two projects stay separate: the RAG key belongs to
+  its `patient-assistant` agent (it cannot read the staff handbook), and only the question is sent — never the
+  patient's phone number.
 
 ## Tech stack
 
 | Piece | Technology |
 |---|---|
 | Orchestration and agent | n8n 2.40 (AI Agent node, sub-workflows as tools) |
-| LLM, transcription, TTS | Google Gemini (`gemini-flash-lite-latest`, `gemini-2.5-flash-preview-tts`) |
+| LLM, transcription, TTS | Google Gemini (`gemini-3.1-flash-lite`, with `gemini-flash-lite-latest` as fallback and for transcription; `gemini-2.5-flash-preview-tts`) |
 | Database | PostgreSQL 16 + pgvector, PL/pgSQL functions |
 | Migrations | Flyway (versioned `V__` + repeatable `R__`) |
 | Messaging | WhatsApp Cloud API (Meta Graph API) |
@@ -135,9 +146,12 @@ docker compose up -d        # PostgreSQL + Flyway migrations, audio-converter an
 
 `setup-n8n.sh` takes an empty n8n to a working agent:
 
-1. Creates the four credentials from `.env`, with the ids the workflows reference, so every node is already linked.
-2. Imports the nine workflows from `n8n/workflows/` (ids preserved, calendar id filled from `GOOGLE_CALENDAR_ID`).
-3. Publishes them (tools first, then the agent and the scheduled workflows) and restarts n8n.
+1. Creates the credentials from `.env`, with the ids the workflows reference, so every node is already linked.
+2. Runs `./scripts/reload-workflows.sh`: imports the ten workflows from `n8n/workflows/` (ids preserved, calendar id
+   and RAG URL filled from `.env`), publishes them all (tools first) and restarts n8n.
+
+Importing a workflow unpublishes it, so workflow changes are always loaded with `reload-workflows.sh`, never by
+importing one file by hand (a scheduled workflow left unpublished stops running without any error).
 
 | Credential | Used for | From `.env` |
 |---|---|---|
@@ -145,6 +159,7 @@ docker compose up -d        # PostgreSQL + Flyway migrations, audio-converter an
 | WhatsApp account | sending messages, downloading audio | `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_BUSINESS_ACCOUNT_ID` |
 | Google Gemini (PaLM) Api account | chat model, transcription, TTS | `GEMINI_API_KEY` |
 | Google Calendar account | calendar mirror | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` |
+| RAG search API key | clinic documents (optional) | `RAG_SEARCH_API_KEY` (and `RAG_SEARCH_URL`) |
 
 ### 3. The two manual steps
 
@@ -220,5 +235,5 @@ The export removes instance data (owner email, versions, timestamps) and replace
   check the verify token.
 - Single chair: overlapping appointments are not allowed at all (multiple dentists would add a `dentist_id`).
 - Gemini TTS on the free tier takes 40–70 s per voice reply.
-- Next: appointment reminders (they need an approved WhatsApp message template), RAG over clinic documents with
-  pgvector (aftercare instructions, insurance policies), conversation evaluations, and handoff to a human.
+- Next: appointment reminders (they need an approved WhatsApp message template), conversation evaluations, and
+  handoff to a human.

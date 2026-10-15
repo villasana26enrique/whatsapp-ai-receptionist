@@ -6,6 +6,8 @@ const path = require('path');
 const SOURCE = '/repo/workflows';
 const TARGET = '/tmp/workflows-to-import';
 const calendarId = process.env.GOOGLE_CALENDAR_ID;
+// Optional: without it the clinic documents tool answers that it cannot check them
+const ragSearchUrl = process.env.RAG_SEARCH_URL || 'http://rag-search-url-not-configured.invalid/webhook/search';
 
 if (!calendarId) {
   console.error('GOOGLE_CALENDAR_ID is not set in .env');
@@ -16,7 +18,9 @@ fs.rmSync(TARGET, { recursive: true, force: true });
 fs.mkdirSync(TARGET, { recursive: true });
 
 for (const file of fs.readdirSync(SOURCE).filter(f => f.endsWith('.json'))) {
-  const content = fs.readFileSync(path.join(SOURCE, file), 'utf8').replaceAll('__GOOGLE_CALENDAR_ID__', calendarId);
+  const content = fs.readFileSync(path.join(SOURCE, file), 'utf8')
+    .replaceAll('__GOOGLE_CALENDAR_ID__', calendarId)
+    .replaceAll('__RAG_SEARCH_URL__', ragSearchUrl);
   fs.writeFileSync(path.join(TARGET, file), content);
   console.log(`prepared ${file}`);
 }

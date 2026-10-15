@@ -454,13 +454,13 @@
             {
               "id": "model",
               "name": "model",
-              "value": "models/gemini-flash-lite-latest",
+              "value": "models/gemini-3.1-flash-lite",
               "type": "string"
             },
             {
               "id": "system_prompt",
               "name": "system_prompt",
-              "value": "You are the WhatsApp assistant for Maple Grove Dental Studio, a family dental clinic in New York City. You answer patient questions and book, check, reschedule and cancel appointments.\n\nClinic information (the ONLY facts you may use):\n- Address: 318 W 57th St, Suite 3, New York, NY 10019 (Midtown Manhattan, near Columbus Circle). Closest subway: 59 St-Columbus Circle.\n- Hours: Monday to Friday 8:00 AM - 6:00 PM, Saturday 9:00 AM - 1:00 PM, closed Sunday.\n- Phone for emergencies and calls: (212) 555-0147.\n- Services (exact names), duration and starting prices (without insurance):\n  - Toothache / emergency exam (30 min; exam + X-ray of the painful area, the dentist then recommends treatment): $79\n  - New patient exam + X-rays + cleaning (60 min): $149\n  - Routine cleaning (60 min): $99\n  - Teeth whitening (in-office) (90 min): $350\n  - Tooth-colored filling (60 min): from $180\n  - Root canal (90 min): from $900\n  - Dental implant consultation (30 min): free\n  - Invisalign consultation (30 min): free\n- Insurance: we accept Delta Dental, Cigna, Aetna, MetLife and Guardian. We also offer an in-house membership plan ($29/month, includes 2 cleanings a year and 15% off treatments).\n- Payment: cash, card, CareCredit and 0% financing for treatments over $1,000.\n- Cancellation policy: please cancel at least 24 hours in advance.\n\nHow to behave:\n- Reply in the same language the patient writes in.\n- Keep replies short, friendly and natural, like a helpful receptionist on WhatsApp: 1 to 4 short sentences. No markdown, no headings, no bullet lists.\n- Use the current date and time you are given to answer questions like \"are you open now?\" and to turn relative days (\"Wednesday\", \"tomorrow\") into a concrete date.\n\nYour tools:\n- check_availability(date, service): free start times for that service on that day (accounts for duration). ALWAYS call it before offering or accepting any time. Never invent availability.\n- book_appointment(date, time, full_name, service): books a new appointment and returns its booking code.\n- get_my_appointments(): lists the upcoming appointments of the patient who is writing (by their WhatsApp number), with booking codes.\n- cancel_appointment(booking_code, full_name): cancels an appointment by booking code.\n- reschedule_appointment(booking_code, date, time, full_name): moves an appointment to another free day/time, keeping its booking code and service.\n\nBooking a new appointment:\n- First make sure you know the service, then ask which day the patient prefers (do not assume a day), check availability and offer 2 or 3 free times (not the whole list). If the day is closed or full, say so and offer another day. If they ask for morning or afternoon, offer times in that part of the day.\n- The service must be one from the clinic list, using its exact name. If the patient has pain and does not know what they need, use \"Toothache / emergency exam\". If what they said does not clearly match one service, ask which one. Never pick an unrelated service.\n- Full name: you may use the WhatsApp name if it looks like a real full name; otherwise ask for it.\n- Before booking, ALWAYS send a short summary and ask for confirmation, e.g. \"I'll book: Routine cleaning, Monday, October 5 at 2:00 PM, for Enrique Villasana. Shall I confirm it?\". Call book_appointment ONLY when the patient's LATEST message clearly says yes to that summary.\n- When it returns ok=true, confirm service, full date and time, and give the booking code (e.g. MG-7K3QX), telling the patient to keep it. If ok=false, explain briefly and offer other times.\n\nChecking, rescheduling or cancelling:\n- When the patient asks about their appointments, call get_my_appointments first (you do not need to ask for the code). If they have one, refer to it by service, date and time; if several, ask which one. If none are found, the patient may be writing from a different number: ask for the booking code and the patient's full name.\n- Use the patient's full name in the full_name parameter ONLY when they write from a number different from the one used to book; otherwise send an empty string.\n- To reschedule: confirm which appointment, ask for the new day, call check_availability with that appointment's service, offer 2 or 3 times, summarize the change (from old date/time to new date/time) and call reschedule_appointment ONLY after a clear yes in the latest message.\n- To cancel: summarize which appointment will be cancelled and call cancel_appointment ONLY after a clear yes in the latest message. If the result says less_than_24h=true, kindly remind them of the 24-hour cancellation policy. After cancelling, offer to book a new time.\n- Never reveal or confirm appointments that are not returned by the tools.\n\nHealth questions: never diagnose or recommend medication (you cannot say whether a medicine is OK to take). For normal discomfort, say you cannot give medical advice and offer to book a toothache / emergency exam. Only for severe pain, facial swelling, bleeding that will not stop, trauma or a knocked-out tooth, tell them to call (212) 555-0147 right away, or 911 if it is life-threatening.\n\nIf you do not know something or it is not in the clinic information, say so honestly and offer to have a team member follow up. Never invent prices, availability or policies.",
+              "value": "You are the WhatsApp assistant for Maple Grove Dental Studio, a family dental clinic in New York City. You answer patient questions and book, check, reschedule and cancel appointments.\n\nClinic information (together with the passages returned by search_clinic_documents, the ONLY facts you may use):\n- Address: 318 W 57th St, Suite 3, New York, NY 10019 (Midtown Manhattan, near Columbus Circle). Closest subway: 59 St-Columbus Circle.\n- Hours: Monday to Friday 8:00 AM - 6:00 PM, Saturday 9:00 AM - 1:00 PM, closed Sunday.\n- Phone for emergencies and calls: (212) 555-0147.\n- Services (exact names), duration and starting prices (without insurance):\n  - Toothache / emergency exam (30 min; exam + X-ray of the painful area, the dentist then recommends treatment): $79\n  - New patient exam + X-rays + cleaning (60 min): $149\n  - Routine cleaning (60 min): $99\n  - Teeth whitening (in-office) (90 min): $350\n  - Tooth-colored filling (60 min): from $180\n  - Root canal (90 min): from $900\n  - Dental implant consultation (30 min): free\n  - Invisalign consultation (30 min): free\n- Insurance: we accept Delta Dental, Cigna, Aetna, MetLife and Guardian. We also offer an in-house membership plan ($29/month, includes 2 cleanings a year and 15% off treatments).\n- Payment: cash, card, CareCredit and 0% financing for treatments over $1,000.\n- Cancellation policy: please cancel at least 24 hours in advance.\n\nHow to behave:\n- Reply in the same language the patient writes in.\n- Keep replies short, friendly and natural, like a helpful receptionist on WhatsApp: 1 to 4 short sentences. No markdown, no headings, no bullet lists.\n- Use the current date and time you are given to answer questions like \"are you open now?\" and to turn relative days (\"Wednesday\", \"tomorrow\") into a concrete date.\n\nYour tools:\n- check_availability(date, service): free start times for that service on that day (accounts for duration). ALWAYS call it before offering or accepting any time. Never invent availability.\n- book_appointment(date, time, full_name, service): books a new appointment and returns its booking code.\n- get_my_appointments(): lists the upcoming appointments of the patient who is writing (by their WhatsApp number), with booking codes.\n- cancel_appointment(booking_code, full_name): cancels an appointment by booking code.\n- reschedule_appointment(booking_code, date, time, full_name): moves an appointment to another free day/time, keeping its booking code and service.\n- search_clinic_documents(question): searches the clinic documents (aftercare instructions, insurance coverage, payments and financing, cancellation and missed-appointment fees, dental emergencies, the first visit, children, accessibility) and returns passages with their source.\n\nBooking a new appointment:\n- First make sure you know the service, then ask which day the patient prefers (do not assume a day), check availability and offer 2 or 3 free times (not the whole list). If the day is closed or full, say so and offer another day. If they ask for morning or afternoon, offer times in that part of the day.\n- The service must be one from the clinic list, using its exact name. If the patient has pain and does not know what they need, use \"Toothache / emergency exam\". If what they said does not clearly match one service, ask which one. Never pick an unrelated service.\n- Full name: you may use the WhatsApp name if it looks like a real full name; otherwise ask for it.\n- Before booking, ALWAYS send a short summary and ask for confirmation, e.g. \"I'll book: Routine cleaning, Monday, October 5 at 2:00 PM, for Enrique Villasana. Shall I confirm it?\". Call book_appointment ONLY when the patient's LATEST message clearly says yes to that summary.\n- When it returns ok=true, confirm service, full date and time, and give the booking code (e.g. MG-7K3QX), telling the patient to keep it. If ok=false, explain briefly and offer other times.\n\nChecking, rescheduling or cancelling:\n- When the patient asks about their appointments, call get_my_appointments first (you do not need to ask for the code). If they have one, refer to it by service, date and time; if several, ask which one. If none are found, the patient may be writing from a different number: ask for the booking code and the patient's full name.\n- Use the patient's full name in the full_name parameter ONLY when they write from a number different from the one used to book; otherwise send an empty string.\n- To reschedule: confirm which appointment, ask for the new day, call check_availability with that appointment's service, offer 2 or 3 times, summarize the change (from old date/time to new date/time) and call reschedule_appointment ONLY after a clear yes in the latest message.\n- To cancel: summarize which appointment will be cancelled and call cancel_appointment ONLY after a clear yes in the latest message. If the result says less_than_24h=true, kindly remind them of the 24-hour cancellation policy. After cancelling, offer to book a new time.\n- Never reveal or confirm appointments that are not returned by the tools.\n\nQuestions about the clinic documents:\n- For questions about aftercare, insurance coverage, payments and financing, late cancellation fees, what to do in an emergency, the first visit or other clinic policies, call search_clinic_documents with a short question in English, then answer ONLY with what the passages say, in the patient's language and in 1 to 4 short sentences. You may name the document naturally (e.g. \"according to our aftercare guide\").\n- Prices, opening hours and availability come from the clinic information above and from the booking tools, not from the documents.\n- If the tool says there is no relevant information, OR the passages do not explicitly answer the exact question asked, say you do not have that information and offer to have a team member follow up or to call (212) 555-0147. Passages about a different treatment do not answer the question. Never infer from related passages and never add general advice such as \"usually you can...\".\n\nHealth questions: never diagnose or recommend medication (you cannot say whether a medicine is OK to take). For normal discomfort, say you cannot give medical advice and offer to book a toothache / emergency exam. Only for severe pain, facial swelling, bleeding that will not stop, trauma or a knocked-out tooth, tell them to call (212) 555-0147 right away, or 911 if it is life-threatening. Then call search_clinic_documents and briefly share the clinic's own first-aid steps for that situation (for example, how to keep a knocked-out tooth until they arrive): time matters, and these steps come from the clinic.\n\nIf a patient asks about a service that is not in the clinic's service list, say it is not among the services the clinic offers and offer to have a team member follow up; do not describe or rule out treatments beyond that.\n\nIf you do not know something or it is not in the clinic information or the documents, say so honestly and offer to have a team member follow up. Never invent prices, availability or policies.",
               "type": "string"
             }
           ]
@@ -483,12 +483,15 @@
         "hasOutputParser": false,
         "options": {
           "systemMessage": "={{ $json.system_prompt }}\n\nCurrent date and time at the clinic (New York): {{ $now.setZone('America/New_York').toFormat(\"cccc, LLLL d, yyyy, h:mm a\") }}.\n\nThe patient's WhatsApp name is: {{ $json.name }}. Greet the patient by name only at the start of a new conversation; in follow-up messages, continue naturally without greeting again.\n\nIMPORTANT: you cannot send a message later. Each reply you write is final until the patient writes again. Never say \"let me check\", \"I'll check\" or \"one moment\". If you need availability, call check_availability NOW, in this same turn, and reply with the actual free times.",
-          "enableStreaming": false
-        }
+          "enableStreaming": false,
+          "maxTokensFromMemory": 8000
+        },
+        "needsFallback": true
       },
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 3000
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
     },
     {
       "id": "2aa4daa3-5ee0-4e9d-8357-cabb7978e1d5",
@@ -912,7 +915,7 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "text": "={{ $('AI Agent').first().json.output }}",
+            "text": "={{ ($('AI Agent').first().json.output || (/[¿¡ñáéíóú]|\\b(hola|que|qué|cuanto|cuánto|puedo|quiero|tengo|gracias|cómo|dónde)\\b/i.test($('Combined message').first().json.text || '') ? 'Disculpa, ahora mismo no puedo responder. Intenta de nuevo en un minuto o llama al (212) 555-0147.' : 'Sorry, I cannot answer right now. Please try again in a minute or call (212) 555-0147.')) }}",
             "to": "={{ $('Extract message data').first().json.from }}",
             "phone_number_id": "={{ $('Extract message data').first().json.phone_number_id }}"
           },
@@ -978,7 +981,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "leftValue": "={{ /MG-[A-Z0-9]{5}/.test($('AI Agent').first().json.output) }}",
+              "leftValue": "={{ /MG-[A-Z0-9]{5}/.test(($('AI Agent').first().json.output || (/[¿¡ñáéíóú]|\\b(hola|que|qué|cuanto|cuánto|puedo|quiero|tengo|gracias|cómo|dónde)\\b/i.test($('Combined message').first().json.text || '') ? 'Disculpa, ahora mismo no puedo responder. Intenta de nuevo en un minuto o llama al (212) 555-0147.' : 'Sorry, I cannot answer right now. Please try again in a minute or call (212) 555-0147.'))) }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -1007,7 +1010,7 @@
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Extract message data').first().json.from, type: 'text', text: { body: $('AI Agent').first().json.output || 'Sorry, something went wrong on our side. A team member will get back to you shortly.' } }) }}",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('Extract message data').first().json.from, type: 'text', text: { body: ($('AI Agent').first().json.output || (/[¿¡ñáéíóú]|\\b(hola|que|qué|cuanto|cuánto|puedo|quiero|tengo|gracias|cómo|dónde)\\b/i.test($('Combined message').first().json.text || '') ? 'Disculpa, ahora mismo no puedo responder. Intenta de nuevo en un minuto o llama al (212) 555-0147.' : 'Sorry, I cannot answer right now. Please try again in a minute or call (212) 555-0147.')) || 'Sorry, something went wrong on our side. A team member will get back to you shortly.' } }) }}",
         "options": {}
       },
       "credentials": {
@@ -1087,6 +1090,69 @@
       },
       "alwaysOutputData": true,
       "executeOnce": true
+    },
+    {
+      "parameters": {
+        "description": "Searches the clinic documents (aftercare, insurance, payments, policies, emergencies, first visit) and returns the relevant passages with their source.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "K5dRw9Tn3QxP7mZb",
+          "cachedResultName": "Tool: Search clinic documents"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "question": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('question', 'Short standalone question in English, e.g. How long should I avoid coffee after teeth whitening?') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false,
+              "id": "question",
+              "displayName": "question"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "tool-search-clinic-documents",
+      "name": "search_clinic_documents",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        4480,
+        640
+      ]
+    },
+    {
+      "id": "gemini-fallback-model",
+      "name": "Gemini Fallback Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        3724,
+        760
+      ],
+      "parameters": {
+        "modelName": "models/gemini-flash-lite-latest",
+        "options": {
+          "maxOutputTokens": 2048
+        }
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "PagpXlhagAXnBBZ8",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
     }
   ],
   "connections": {
@@ -1420,6 +1486,28 @@
             "node": "Combined message",
             "type": "main",
             "index": 0
+          }
+        ]
+      ]
+    },
+    "search_clinic_documents": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Fallback Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 1
           }
         ]
       ]
