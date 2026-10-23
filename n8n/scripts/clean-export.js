@@ -6,6 +6,9 @@ const path = require('path');
 const DIR = '/repo/workflows';
 const CALENDAR_PLACEHOLDER = '__GOOGLE_CALENDAR_ID__';
 const RAG_SEARCH_URL_PLACEHOLDER = '__RAG_SEARCH_URL__';
+// Filled in at import (prepare-import.js); the real secrets must never reach the repository
+const APP_SECRET_PLACEHOLDER = "const APP_SECRET = '__META_APP_SECRET__';";
+const VERIFY_TOKEN_PLACEHOLDER = '__WHATSAPP_VERIFY_TOKEN__';
 // Fields that describe this instance (owner, versions, timestamps), not the workflow itself
 const DROP = ['shared', 'versionMetadata', 'activeVersionId', 'versionCounter', 'triggerCount',
   'sourceWorkflowId', 'createdAt', 'updatedAt', 'versionId', 'staticData', 'pinData', 'isArchived'];
@@ -28,6 +31,12 @@ for (const file of fs.readdirSync(DIR).filter(f => f.endsWith('.json'))) {
     // The RAG search URL depends on where it is deployed
     if (node.type === 'n8n-nodes-base.httpRequest' && /\/webhook\/search$/.test(node.parameters.url || '')) {
       node.parameters.url = RAG_SEARCH_URL_PLACEHOLDER;
+    }
+    if (node.type === 'n8n-nodes-base.code' && /const APP_SECRET = /.test(node.parameters.jsCode || '')) {
+      node.parameters.jsCode = node.parameters.jsCode.replace(/const APP_SECRET = '[^']*';/, APP_SECRET_PLACEHOLDER);
+    }
+    if (node.name === 'Verify token matches?') {
+      for (const condition of node.parameters.conditions.conditions) condition.rightValue = VERIFY_TOKEN_PLACEHOLDER;
     }
   }
 

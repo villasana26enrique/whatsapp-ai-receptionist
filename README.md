@@ -51,7 +51,8 @@ flowchart LR
 
 **Message flow** (workflow `WhatsApp AI Receptionist`):
 
-1. Meta calls the webhook; n8n answers `200` immediately and marks the message as read with a typing indicator.
+1. Meta calls the webhook. A Code node checks the `X-Hub-Signature-256` signature (403 if it does not match); then
+   n8n answers `200` immediately and marks the message as read with a typing indicator.
 2. Voice notes are downloaded and transcribed; text and audio continue the same way.
 3. The message is buffered for 8 seconds; only the execution of the latest message continues, with all texts merged.
 4. The **AI Agent** (Gemini + Postgres chat memory) replies, calling these tools when needed:
@@ -79,6 +80,11 @@ Background workflows: **Sync appointments to Google Calendar** (every 15 min) an
 - **Code does the math, the LLM does the talking.** Free slots, opening hours and durations are computed in SQL;
   the model only converses and calls tools. All business rules live in PL/pgSQL functions that return
   `{ok, message}` instead of raising errors, so the agent can explain what went wrong.
+- **Verify the sender.** A webhook URL is public; without a check anyone could post fake messages and book or cancel
+  appointments. Meta signs each request with the app secret (HMAC-SHA256 of the raw body), and the workflow rejects
+  anything that does not match, comparing in constant time. It signs the **raw** body: Meta escapes non-ASCII
+  characters (`á`), so re-serializing the parsed JSON would break exactly the messages written in Spanish.
+  The subscription check (`GET`) also requires the verify token.
 - **Ownership checks** never reveal whether another person's booking code exists.
 - **Soft delete**: cancelled appointments keep their row and full history (`appointment_history`).
 - **Idempotency**: the message buffer has a unique `message_id`, so a webhook Meta delivers twice is answered once.
@@ -147,8 +153,8 @@ docker compose up -d        # PostgreSQL + Flyway migrations, audio-converter an
 `setup-n8n.sh` takes an empty n8n to a working agent:
 
 1. Creates the credentials from `.env`, with the ids the workflows reference, so every node is already linked.
-2. Runs `./scripts/reload-workflows.sh`: imports the ten workflows from `n8n/workflows/` (ids preserved, calendar id
-   and RAG URL filled from `.env`), publishes them all (tools first) and restarts n8n.
+2. Runs `./scripts/reload-workflows.sh`: imports the ten workflows from `n8n/workflows/` (ids preserved; calendar id,
+   RAG URL, app secret and verify token filled from `.env`), publishes them all (tools first) and restarts n8n.
 
 Importing a workflow unpublishes it, so workflow changes are always loaded with `reload-workflows.sh`, never by
 importing one file by hand (a scheduled workflow left unpublished stops running without any error).
@@ -172,6 +178,7 @@ importing one file by hand (a scheduled workflow left unpublished stops running 
 In the Meta app: **WhatsApp → Configuration → Webhook**
 
 - Callback URL: `https://<your-public-domain>/webhook/whatsapp`
+- Verify token: the value of `WHATSAPP_VERIFY_TOKEN` in `.env`.
 - Subscribe to the `messages` field.
 - Add your phone to the test recipients list and send the test number a message.
 
@@ -219,7 +226,11 @@ Edit in the n8n UI, then export so the repository stays the source of truth:
 ./scripts/export-workflows.sh
 ```
 
-The export removes instance data (owner email, versions, timestamps) and replaces the calendar id with a placeholder.
+The export removes instance data (owner email, versions, timestamps) and puts the placeholders back: calendar id,
+RAG URL, app secret and verify token, so the secrets never reach the repository.
+
+To test without a phone, `python scripts/simulate-message.py "Hi"` posts a fake message signed like Meta signs it
+(`--bad-signature` expects a 403). The agent's answer is in the n8n executions; sending it fails, since the number is fake.
 
 ## Privacy
 
@@ -231,8 +242,8 @@ The export removes instance data (owner email, versions, timestamps) and replace
 
 ## Known limitations and next steps
 
-- Webhook requests are not yet verified with Meta's `X-Hub-Signature-256`, and the verification endpoint does not
-  check the verify token.
+- The app secret and verify token are written into the webhook nodes at import time, so n8n users can read them in
+  the editor (they can already use the WhatsApp credential).
 - Single chair: overlapping appointments are not allowed at all (multiple dentists would add a `dentist_id`).
 - Gemini TTS on the free tier takes 40–70 s per voice reply.
 - Next: appointment reminders (they need an approved WhatsApp message template), conversation evaluations, and

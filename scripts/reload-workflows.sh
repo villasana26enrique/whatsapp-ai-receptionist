@@ -12,8 +12,10 @@ ENV_FILE="${ENV_FILE:-.env}"
 set -a; source "$ENV_FILE"; set +a
 docker() { if [ "$1" = compose ]; then shift; command docker compose --env-file "$ENV_FILE" "$@"; else command docker "$@"; fi; }
 
-docker compose exec -T -e GOOGLE_CALENDAR_ID -e RAG_SEARCH_URL n8n node /repo/scripts/prepare-import.js
-docker compose exec -T n8n n8n import:workflow --separate --input=/tmp/workflows-to-import
+# The Meta secrets go into the webhook checks of the main workflow; the export puts the placeholders back
+docker compose exec -T -e GOOGLE_CALENDAR_ID -e RAG_SEARCH_URL -e META_APP_SECRET -e WHATSAPP_VERIFY_TOKEN \
+  n8n node /repo/scripts/prepare-import.js
+docker compose exec -T n8n sh -c 'n8n import:workflow --separate --input=/tmp/workflows-to-import; status=$?; rm -rf /tmp/workflows-to-import; exit $status'
 
 # Sub-workflows first, so the agent's tools exist when the agent is published
 for id in u4zk3B48hPfoFaaa tCInZXEmBEsGlo9t 4e88mmZwNoHCeo16 5Iy94ttvJAAoeHMJ FK9P24mIWJfyvTCV QZQq06oaHBMGxTpB \

@@ -27,7 +27,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        224,
+        448,
         0
       ],
       "parameters": {
@@ -51,7 +51,9 @@
         "httpMethod": "POST",
         "path": "whatsapp",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": true
+        }
       },
       "webhookId": "ed5c0926-479a-4768-ac16-29aad5087265"
     },
@@ -61,7 +63,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        224,
+        672,
         320
       ],
       "parameters": {
@@ -1153,6 +1155,118 @@
           "name": "Google Gemini(PaLM) Api account"
         }
       }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Meta signs every webhook: \"sha256=\" + HMAC-SHA256(App Secret, raw request body) in X-Hub-Signature-256.\n// The raw body is required: Meta escapes non-ASCII characters (á), so re-serializing the parsed JSON would not match.\n// The secret is filled in at import (scripts/reload-workflows.sh); while it is a placeholder every request is rejected.\nconst crypto = require('crypto');\nconst APP_SECRET = '__META_APP_SECRET__';\n\nconst item = $input.first();\nconst rawBody = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = 'sha256=' + crypto.createHmac('sha256', APP_SECRET).update(rawBody).digest('hex');\nconst received = String(item.json.headers['x-hub-signature-256'] || '');\nconst valid = !APP_SECRET.startsWith('__') && received.length === expected.length\n  && crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));\n\n// The rest of the workflow keeps reading the parsed event; the raw body is not needed anymore\nreturn [{ json: { ...item.json, signature_valid: valid } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        320
+      ],
+      "id": "747fcc10-ee6e-433c-832c-e51892b5a296",
+      "name": "Verify Meta signature"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.signature_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        320
+      ],
+      "id": "988b99a9-2705-40e0-8868-4d05824d04a5",
+      "name": "Valid signature?"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        512
+      ],
+      "id": "acf3d558-e1c0-4246-852b-0cf77a6328bd",
+      "name": "Reject event (403)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.query['hub.verify_token'] ?? '' }}",
+              "rightValue": "__WHATSAPP_VERIFY_TOKEN__",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "0a2fab49-f208-4724-9e5f-af2807c8f7b1",
+      "name": "Verify token matches?"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        192
+      ],
+      "id": "589d2016-82e3-4e6a-b5ca-af48c11fa6ab",
+      "name": "Reject verification (403)"
     }
   ],
   "connections": {
@@ -1160,7 +1274,7 @@
       "main": [
         [
           {
-            "node": "Respond with challenge",
+            "node": "Verify token matches?",
             "type": "main",
             "index": 0
           }
@@ -1171,7 +1285,7 @@
       "main": [
         [
           {
-            "node": "Acknowledge Meta (200)",
+            "node": "Verify Meta signature",
             "type": "main",
             "index": 0
           }
@@ -1508,6 +1622,53 @@
             "node": "AI Agent",
             "type": "ai_languageModel",
             "index": 1
+          }
+        ]
+      ]
+    },
+    "Verify Meta signature": {
+      "main": [
+        [
+          {
+            "node": "Valid signature?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid signature?": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Meta (200)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject event (403)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify token matches?": {
+      "main": [
+        [
+          {
+            "node": "Respond with challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject verification (403)",
+            "type": "main",
+            "index": 0
           }
         ]
       ]

@@ -47,6 +47,10 @@ PostgreSQL is the source of truth; Google Calendar is only a mirror kept in sync
   publishes them all); never import a single file by hand.
 - Never hard-code personal or instance data in workflows: the calendar id is `__GOOGLE_CALENDAR_ID__` and the RAG
   search URL is `__RAG_SEARCH_URL__` in the exported files; credentials are referenced, never embedded.
+- The webhook checks hold `__META_APP_SECRET__` (`Verify Meta signature`) and `__WHATSAPP_VERIFY_TOKEN__`
+  (`Verify token matches?`) in the repository; `prepare-import.js` fills them in and `clean-export.js` puts them back.
+  Before committing an export, check that both are still placeholders. Never remove the checks or answer `200`
+  before them. The signature is computed over the raw body (`rawBody` option of the webhook), never re-serialized JSON.
 - AI Agent nodes have a fallback model (`needsFallback`, a second chat model on input 1): keep both, so a 503 from
   one Gemini model does not leave the user without an answer.
 - AI Agent nodes keep `options.maxTokensFromMemory` (8000). It makes n8n trim the memory so the history always
@@ -77,3 +81,4 @@ PostgreSQL is the source of truth; Google Calendar is only a mirror kept in sync
 | Export workflows | `./scripts/export-workflows.sh` |
 | Load workflow changes into n8n | `./scripts/reload-workflows.sh` |
 | Set up a fresh n8n (credentials + workflows + publish) | `./scripts/setup-n8n.sh` |
+| Send a signed fake WhatsApp message | `python scripts/simulate-message.py "Hi"` |

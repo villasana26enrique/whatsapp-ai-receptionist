@@ -51,6 +51,8 @@ services:
       TZ: America/New_York
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # The Code node that checks Meta's webhook signature needs Node's crypto module
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
     volumes:
       - n8n_data:/home/node/.n8n
       # Versioned workflows + setup/export helpers (see scripts/)
